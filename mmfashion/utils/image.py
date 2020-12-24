@@ -14,17 +14,28 @@ def get_img_tensor(img_path, use_cuda, get_size=False):
 
     img_size = (224, 224)  # crop image to (224, 224)
     img.thumbnail(img_size, Image.ANTIALIAS)
+    w, h = img.size
     img = img.convert('RGB')
     normalize = transforms.Normalize(
         mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
     transform = transforms.Compose([
-        transforms.RandomResizedCrop(img_size[0]),
+        transforms.Pad((max(h - w, 0)//2,
+                        max(w - h, 0)//2), padding_mode='edge'),
+        # transforms.Resize(img_size),
+        # transforms.RandomResizedCrop(img_size[0]),
         transforms.RandomHorizontalFlip(),
         transforms.ToTensor(),
         normalize,
     ])
     img_tensor = transform(img)
+
+    # toImage = transforms.ToPILImage()
+    # my_img = toImage(img_tensor)
+    # plt.imshow(my_img)
+    # plt.show()
+
     img_tensor = torch.unsqueeze(img_tensor, 0)
+
     if use_cuda:
         img_tensor = img_tensor.cuda()
     if get_size:
