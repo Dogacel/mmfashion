@@ -39,35 +39,50 @@ def annotate():
     img_tensor = get_img_tensor(file, False)
 
     # predict probabilities for each attribute
-    attr_prob, cate_prob = model(
+    fine_attr_prob, cate_prob = model_fine(
         img_tensor, attr=None, landmark=landmark_tensor, return_loss=False)
 
-    attrs = jsonResult(attr_prob, attr_predictor.attr_idx2name)
+    fine_attrs = jsonResult(fine_attr_prob, fine_attr_predictor.attr_idx2name)
     cats = jsonResult(cate_prob, cate_predictor.cate_idx2name)
 
+    coarse_attr_prob = model_coarse(
+        img_tensor, attr=None, landmark=landmark_tensor, return_loss=False)
+
+    coarse_attr_predictor.show_prediction(coarse_attr_prob)
+
     resultDict = {}
-    resultDict['attributes'] = attrs
+    resultDict['attributes'] = fine_attrs
     resultDict['categories'] = cats
 
     return jsonify(resultDict)
 
 
 if __name__ == '__main__':
-    cfg = Config.fromfile(
+    cfg_fine = Config.fromfile(
         './configs/category_attribute_predict/global_predictor_vgg.py')
+    cfg_coarse = Config.fromfile(
+        './configs/attribute_predict_coarse/roi_predictor_resnet_attr.py')
 
     # global attribute predictor will not use landmarks
     # just set a default value
     landmark_tensor = torch.zeros(8)
 
-    model = build_predictor(cfg.model)
-    load_checkpoint(model, './checkpoint/vgg16_fine_global.pth',
+    model_fine = build_predictor(cfg_fine.model)
+    load_checkpoint(model_fine, './checkpoint/vgg16_fine_global.pth',
                     map_location='cpu')
-    print('Model loaded.')
 
-    model.eval()
+    model_coarse = build_predictor(cfg_coarse.model)
+    load_checkpoint(model_coarse, './checkpoint/coarse-resnet-landmark.pth',
+                    map_location='cpu')
 
-    attr_predictor = AttrPredictor(cfg.data.test)
-    cate_predictor = CatePredictor(cfg.data.test)
+    print('Models loaded.')
+
+    model_fine.eval()
+    model_coarse.eval()
+
+    fine_attr_predictor = AttrPredictor(cfg_fine.data.test)
+    cate_predictor = CatePredictor(cfg_fine.data.test)
+
+    coarse_attr_predictor = AttrPredictor(cfg_coarse.data.test)
 
     app.run()
