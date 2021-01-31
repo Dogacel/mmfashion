@@ -12,7 +12,8 @@ class GlobalPredictor(BasePredictor):
                  attr_predictor,
                  cate_predictor=None,
                  roi_pool=None,
-                 pretrained=None):
+                 pretrained=None,
+                 loss_attr=None):
         super(GlobalPredictor, self).__init__()
 
         self.backbone = builder.build_backbone(backbone)
