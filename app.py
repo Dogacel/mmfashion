@@ -82,4 +82,4 @@ if __name__ == '__main__':
     cate_predictor = CatePredictor(cfg_fine.data.test)
     coarse_attr_predictor = AttrPredictor(cfg_coarse.data.test)
 
-    app.run(port=5000)
+    app.run(host="0.0.0.0", port=80)
