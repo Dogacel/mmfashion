@@ -36,7 +36,7 @@ def jsonResult(pred, idx2name):
 
 def closest_color(requested_color):
     min_colors = {}
-    for key, name in webcolors.css3_hex_to_names.items():
+    for key, name in webcolors.CSS3_HEX_TO_NAMES.items():
         r_c, g_c, b_c = webcolors.hex_to_rgb(key)
         rd = (r_c - requested_color[0]) ** 2
         gd = (g_c - requested_color[1]) ** 2
@@ -69,7 +69,7 @@ def annotate():
     cats = jsonResult(cate_prob, cate_predictor.cate_idx2name)
 
     colors = colorgram.extract(file, 5)
-    color_names = [get_color_name(x)[1] for x in colors]
+    color_names = [get_color_name(x.rgb)[1] for x in colors]
 
     resultDict = {}
     resultDict['attributes'] = coarse_attrs
