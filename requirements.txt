@@ -1,3 +1,6 @@
 -r requirements/build.txt
 -r requirements/runtime.txt
 -r requirements/tests.txt
+
+colorgram.py==1.2.0
+webcolors==1.11.1
