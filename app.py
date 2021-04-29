@@ -1,20 +1,21 @@
 import numpy as np
 import torch
 
-from flask import Flask, request
+from flask import Flask, request, send_from_directory
 from flask_cors import CORS
 from flask import jsonify
 
 from mmcv import Config
 from mmcv.runner import load_checkpoint
 
-from mmfashion.core import AttrPredictor, CatePredictor
-from mmfashion.models import build_predictor
+from mmfashion.core import AttrPredictor, CatePredictor, ClothesRetriever
+from mmfashion.models import build_predictor, build_retriever
+from mmfashion.datasets import build_dataloader, build_dataset
 from mmfashion.utils import get_img_tensor
 
 import colorgram, webcolors
 
-app = Flask(__name__)
+app = Flask(__name__, static_url_path='/data')
 CORS(app)
 
 
@@ -52,6 +53,56 @@ def get_color_name(requested_color):
         actual_name = None
     return actual_name, closest_name
 
+def _process_embeds(dataset, model, cfg, use_cuda=True):
+    data_loader = build_dataloader(
+        dataset,
+        cfg.data.imgs_per_gpu,
+        cfg.data.workers_per_gpu,
+        len(cfg.gpus.test),
+        dist=False,
+        shuffle=False)
+
+    print(cfg.data)
+    embeds = []
+    with torch.no_grad():
+        i = 0
+        print("Data loader size: " + str(len(data_loader)))
+        for data in data_loader:
+            print(i)
+            i += 1
+            img = data['img']
+            if use_cuda:
+                img = data['img'].cuda()
+            embed = model(img, landmark=data['landmark'], return_loss=False)
+            embeds.append(embed)
+
+    embeds = torch.cat(embeds)
+    embeds = embeds.data.cpu().numpy()
+    return embeds
+
+
+@app.route('/img/<path:path>')
+def send_img(path):
+    return send_from_directory('data', path)
+
+
+@app.route('/retrieve', methods=(['POST']))
+def retrieve():
+    file = request.files.get('image')
+    img_tensor = get_img_tensor(file, True)
+ 
+    query_feat = model_ret(img_tensor, landmark=None, return_loss=False)
+    query_feat = query_feat.data.cpu().numpy()
+    gallery_set = build_dataset(cfg_ret.data.gallery)
+    gallery_embeds = _process_embeds(gallery_set, model_ret, cfg_ret)
+    retriever = ClothesRetriever(cfg_ret.data.gallery.img_file, cfg_ret.data_root,
+                                 cfg_ret.data.gallery.img_path)
+
+    result = retriever.show_retrieved_images(query_feat, gallery_embeds)
+    resultDict = {}
+    resultDict['paths'] = result
+    return jsonify(resultDict)
+
 @app.route('/annotate', methods=(['POST']))
 def annotate():
     file = request.files.get('image')
@@ -84,7 +135,8 @@ if __name__ == '__main__':
         './configs/category_attribute_predict/global_predictor_vgg.py')
     cfg_coarse = Config.fromfile(
         './configs/attribute_predict_coarse/global_predictor_resnet_attr.py')
-
+    cfg_ret = Config.fromfile('configs/retriever_in_shop/global_retriever_vgg_loss_id.py')
+    
     # global attribute predictor will not use landmarks
     # just set a default value
     landmark_tensor = torch.zeros(8)
@@ -97,10 +149,15 @@ if __name__ == '__main__':
     load_checkpoint(model_coarse, './checkpoint/resnet_coarse_global.pth',
                     map_location='cpu')
 
+
+    model_ret = build_retriever(cfg_ret.model).cuda()
+    load_checkpoint(model_ret, 'checkpoint/Retrieve/vgg/global/epoch_100.pth', map_location=torch.device('cuda:0'))
+
     print('Models loaded.')
 
     model_fine.eval()
     model_coarse.eval()
+    model_ret.eval()
 
     cate_predictor = CatePredictor(cfg_fine.data.test)
     coarse_attr_predictor = AttrPredictor(cfg_coarse.data.test)

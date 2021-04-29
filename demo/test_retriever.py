@@ -45,9 +45,15 @@ def _process_embeds(dataset, model, cfg, use_cuda=True):
         dist=False,
         shuffle=False)
 
+    print(cfg.data)
     embeds = []
     with torch.no_grad():
+        i = 0
+        print("Data loader size: " + str(len(data_loader)))
         for data in data_loader:
+            print(i)
+            i += 1
+            img = data['img']
             if use_cuda:
                 img = data['img'].cuda()
             embed = model(img, landmark=data['landmark'], return_loss=False)
@@ -60,33 +66,40 @@ def _process_embeds(dataset, model, cfg, use_cuda=True):
 
 def main():
     seed = 0
+
     torch.manual_seed(seed)
-    if torch.cuda.is_available():
+    args = parse_args()
+    if args.use_cuda and torch.cuda.is_available():
         torch.cuda.manual_seed_all(seed)
 
-    args = parse_args()
     cfg = Config.fromfile(args.config)
 
     model = build_retriever(cfg.model)
-    load_checkpoint(model, args.checkpoint)
+    load_checkpoint(model, args.checkpoint, map_location=torch.device('cuda:0'))
     print('load checkpoint from {}'.format(args.checkpoint))
 
     if args.use_cuda:
         model.cuda()
     model.eval()
 
+    print('Model evaled')
     img_tensor = get_img_tensor(args.input, args.use_cuda)
-
+    print('Image tensor got.')
     query_feat = model(img_tensor, landmark=None, return_loss=False)
+    print('Query feat 1')
     query_feat = query_feat.data.cpu().numpy()
-
+    print('Query feat 2')
     gallery_set = build_dataset(cfg.data.gallery)
+    print('Gallery set')
     gallery_embeds = _process_embeds(gallery_set, model, cfg)
-
+    print('Gallery embeds')
     retriever = ClothesRetriever(cfg.data.gallery.img_file, cfg.data_root,
                                  cfg.data.gallery.img_path)
-    retriever.show_retrieved_images(query_feat, gallery_embeds)
-
+    print('Retriever')
+    results = retriever.show_retrieved_images(query_feat, gallery_embeds)
+    print('Show retriever')
+    for result in results:
+        print(result)
 
 if __name__ == '__main__':
     main()
